@@ -24,7 +24,7 @@ jobs:
       - name: Integrate KernelSU-Next
         run: |
           echo "Mengunduh dan menyuntikkan KernelSU-Next..."
-          curl -LSs --retry 5 --retry-delay 3 "https://githubusercontent.com" | bash -s main
+          curl -LSs --retry 5 --retry-delay 3 "https://githubusercontent.com" | bash -s legacy
           
           # DETEKSI OTOMATIS: Mencari di mana letak file sweet_defconfig berada
           CONF_PATH=$(find arch/arm64/configs/ -name "sweet_defconfig" | head -n 1)
