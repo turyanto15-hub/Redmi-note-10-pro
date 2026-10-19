@@ -28,8 +28,7 @@ jobs:
         run: |
           echo "Mengunduh dan menyuntikkan KernelSU-Next..."
           # Menambahkan parameter retry agar anti-gagal jika koneksi internet tidak stabil
-          curl -LSs --retry 5 --retry-delay 3 "https://githubusercontent.com" | bash -s main
-          
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
           # Membuka dan menyuntikkan konfigurasi KSU ke jalur vendor yang tepat
           echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/sweet_defconfig
           echo "CONFIG_KSU_NEXT=y" >> arch/arm64/configs/vendor/sweet_defconfig
