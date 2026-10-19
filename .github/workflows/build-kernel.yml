@@ -27,9 +27,12 @@ jobs:
       - name: Integrate KernelSU-Next
         run: |
           echo "Mengunduh dan menyuntikkan KernelSU-Next..."
-          curl -LSs "https://githubusercontent.com" | bash -s main
-          echo "CONFIG_KSU=y" >> arch/arm64/configs/sweet_defconfig
-          echo "CONFIG_KSU_NEXT=y" >> arch/arm64/configs/sweet_defconfig
+          # Menambahkan parameter retry agar anti-gagal jika koneksi internet tidak stabil
+          curl -LSs --retry 5 --retry-delay 3 "https://githubusercontent.com" | bash -s main
+          
+          # Membuka dan menyuntikkan konfigurasi KSU ke jalur vendor yang tepat
+          echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/sweet_defconfig
+          echo "CONFIG_KSU_NEXT=y" >> arch/arm64/configs/vendor/sweet_defconfig
 
       - name: Hardcode Patch to Hide Bootloader Unlock (UBL)
         run: |
@@ -45,6 +48,16 @@ jobs:
           export PATH="${PWD}/proton-clang/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
+          
+          # Membuat konfigurasi defconfig dari jalur vendor yang benar
+          make O=out vendor/sweet_defconfig
+          
+          # Proses kompilasi utama
+          make -j$(nproc --all) O=out \
+                      CC=clang \
+                      CROSS_COMPILE=aarch64-linux-gnu- \
+                      CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+
           
           # Membuat konfigurasi defconfig
           make O=out sweet_defconfig
