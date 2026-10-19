@@ -20,8 +20,7 @@ jobs:
       - name: Download Proton Clang Toolchain
         run: |
           echo "Mengunduh Proton Clang Compiler..."
-          git clone --depth 1 --single-branch https://gitlab.com proton-clang
-
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git
       - name: Integrate KernelSU-Next
         run: |
           echo "Mengunduh dan menyuntikkan KernelSU-Next..."
