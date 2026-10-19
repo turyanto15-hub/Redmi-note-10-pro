@@ -25,8 +25,7 @@ jobs:
       - name: Mengunduh dan menyuntikkan KernelSU-Next
         working-directory: kernel-source
         run: |
-          curl -LSs "https://githubusercontent.com" | bash -s legacy
-
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
       - name: Deteksi Otomatis dan Injeksi Defconfig
         working-directory: kernel-source
         run: |
