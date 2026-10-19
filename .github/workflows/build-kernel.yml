@@ -22,40 +22,7 @@ jobs:
           echo "Mengunduh Proton Clang Compiler..."
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git
           
-      - name: Mengunduh dan menyuntikkan KernelSU-Next
-        run: |
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
-      - name: Deteksi Otomatis dan Injeksi Defconfig
-        run: |
-          # DETEKSI OTOMATIS: Mencari di mana letak file sweet_defconfig berada
-          CONF_PATH=$(find arch/arm64/configs/ -name "sweet_defconfig" | head -n 1)
-          if [ -n "$CONF_PATH" ]; then
-            echo "File defconfig ditemukan di: $CONF_PATH"
-            
-            # Memasukkan konfigurasi dasar KernelSU-Next
-            echo "CONFIG_KSU=y" >> "$CONF_PATH"
-            echo "CONFIG_KSU_NEXT=y" >> "$CONF_PATH"
-            
-            # REKOMENDASI TAMBAHAN UNTUK 4.14 (NON-GKI): Mengaktifkan Kprobe Hooks
-            echo "CONFIG_KPROBES=y" >> "$CONF_PATH"
-            echo "CONFIG_HAVE_KPROBES=y" >> "$CONF_PATH"
-            echo "CONFIG_KPROBE_EVENTS=y" >> "$CONF_PATH"
-            echo "CONFIG_KSU_KPROBE_HOOKS=y" >> "$CONF_PATH"
-            
-            echo "Konfigurasi KernelSU-Next berhasil disuntikkan ke defconfig!"
-          else
-            echo "PERINGATAN: File sweet_defconfig tidak ditemukan di folder configs!"
-            exit 1
-          fi
-
-      - name: Hardcode Patch to Hide Bootloader Unlock (UBL)
-        run: |
-          echo "Memulai injeksi bypass UBL..."
-          find . -type f -name "*.c" -o -name "*.h" -o -name "*.sh" | xargs sed -i 's/androidboot.verifiedbootstate=orange/androidboot.verifiedbootstate=green/g' 2>/dev/null || true
-          find . -type f -name "*.c" -o -name "*.h" -o -name "*.sh" | xargs sed -i 's/androidboot.flash.locked=0/androidboot.flash.locked=1/g' 2>/dev/null || true
-          find . -type f -name "init_context.c" -o -name "init.c" | xargs sed -i 's/boot_state = "orange"/boot_state = "green"/g' 2>/dev/null || true
-          find drivers/of/ -type f -name "*.c" | xargs sed -i 's/"orange"/"green"/g' 2>/dev/null || true
-
+      
       - name: Compile Kernel Manually
         run: |
           echo "Memulai proses kompilasi kernel dengan Proton Clang..."
