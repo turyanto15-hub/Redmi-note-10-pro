@@ -20,18 +20,23 @@ jobs:
       - name: Download Proton Clang Toolchain
         run: |
           echo "Mengunduh Proton Clang Compiler..."
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git
-
-
+          git clone --depth 1 --single-branch https://gitlab.com proton-clang
 
       - name: Integrate KernelSU-Next
         run: |
           echo "Mengunduh dan menyuntikkan KernelSU-Next..."
-          # Menambahkan parameter retry agar anti-gagal jika koneksi internet tidak stabil
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
-          # Membuka dan menyuntikkan konfigurasi KSU ke jalur vendor yang tepat
-          echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/sweet_defconfig
-          echo "CONFIG_KSU_NEXT=y" >> arch/arm64/configs/vendor/sweet_defconfig
+          curl -LSs --retry 5 --retry-delay 3 "https://githubusercontent.com" | bash -s main
+          
+          # DETEKSI OTOMATIS: Mencari di mana letak file sweet_defconfig berada
+          CONF_PATH=$(find arch/arm64/configs/ -name "sweet_defconfig" | head -n 1)
+          if [ -n "$CONF_PATH" ]; then
+            echo "File defconfig ditemukan di: $CONF_PATH"
+            echo "CONFIG_KSU=y" >> "$CONF_PATH"
+            echo "CONFIG_KSU_NEXT=y" >> "$CONF_PATH"
+          else
+            echo "PERINGATAN: File sweet_defconfig tidak ditemukan di folder configs!"
+            exit 1
+          fi
 
       - name: Hardcode Patch to Hide Bootloader Unlock (UBL)
         run: |
@@ -48,20 +53,12 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # Membuat konfigurasi defconfig dari jalur vendor yang benar
-          make O=out vendor/sweet_defconfig
+          # DETEKSI JALUR DEFCONFIG KEDUA UNTUK PROSES MAKE
+          CONF_FILE=$(find arch/arm64/configs/ -name "sweet_defconfig" | sed 's|arch/arm64/configs/||')
+          echo "Menggunakan konfigurasi: $CONF_FILE"
           
-          # Proses kompilasi utama
-          make -j$(nproc --all) O=out \
-                      CC=clang \
-                      CROSS_COMPILE=aarch64-linux-gnu- \
-                      CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-
+          make O=out "$CONF_FILE"
           
-          # Membuat konfigurasi defconfig
-          make O=out sweet_defconfig
-          
-          # Proses kompilasi utama
           make -j$(nproc --all) O=out \
                       CC=clang \
                       CROSS_COMPILE=aarch64-linux-gnu- \
@@ -72,7 +69,6 @@ jobs:
           echo "Membuat paket ZIP Flashable..."
           git clone --depth=1 https://github.com AnyKernel3
           
-          # Menyalin hasil build kernel matang ke folder AnyKernel3
           cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/ || cp out/arch/arm64/boot/Image.gz AnyKernel3/ || cp out/arch/arm64/boot/Image AnyKernel3/
           
           cd AnyKernel3
