@@ -21,13 +21,14 @@ jobs:
         run: |
           echo "Mengunduh Proton Clang Compiler..."
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git
-      - name: Integrate KernelSU-Next 
-        run: |
-          echo "Mengunduh dan menyuntikkan KernelSU-Next..."
-          curl -LSs --retry 5 --retry-delay 3 "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
           
-          # DETEKSI OTOMATIS: Mencari di mana letak file sweet_defconfig berada
-         working-directory: kernel-source
+      - name: Mengunduh dan menyuntikkan KernelSU-Next
+        working-directory: kernel-source
+        run: |
+          curl -LSs "https://githubusercontent.com" | bash -s legacy
+
+      - name: Deteksi Otomatis dan Injeksi Defconfig
+        working-directory: kernel-source
         run: |
           # DETEKSI OTOMATIS: Mencari di mana letak file sweet_defconfig berada
           CONF_PATH=$(find arch/arm64/configs/ -name "sweet_defconfig" | head -n 1)
@@ -49,6 +50,7 @@ jobs:
             echo "PERINGATAN: File sweet_defconfig tidak ditemukan di folder configs!"
             exit 1
           fi
+
       - name: Hardcode Patch to Hide Bootloader Unlock (UBL)
         run: |
           echo "Memulai injeksi bypass UBL..."
