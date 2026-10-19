@@ -22,7 +22,6 @@ jobs:
           echo "Mengunduh Proton Clang Compiler..."
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git
       - name: Integrate KernelSU-Next 
-      working-directory: kernel-source
         run: |
           echo "Mengunduh dan menyuntikkan KernelSU-Next..."
           curl -LSs --retry 5 --retry-delay 3 "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
