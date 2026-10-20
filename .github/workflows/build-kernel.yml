@@ -87,7 +87,11 @@ jobs:
           grep -E '^(CONFIG_ARM64|CONFIG_ARCH_QCOM|CONFIG_LOCALVERSION)=' \
             "arch/arm64/configs/${DEVICE}_defconfig" || true
           git submodule status
-
+      - name: Clone AnyKernel3
+        run: |
+          git clone --depth=1 \
+            https://github.com/osm0sis/AnyKernel3.git \
+            AnyKernel3
       - name: Build kernel and package AnyKernel3
         shell: bash
         run: |
