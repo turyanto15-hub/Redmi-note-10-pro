@@ -1,0 +1,62 @@
+
+name: UBports Sweet - Validate and Package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout UBports port
+        uses: actions/checkout@v4
+        with:
+          repository: CraftParking/ubuntu-touch-sweetin
+          ref: master
+          fetch-depth: 1
+
+      - name: Validate source
+        shell: bash
+        run: |
+          set -e
+          echo "Device: sweet / sweetin"
+          echo "Checking repository files..."
+          test -d fixes
+          test -d installer
+          test -f README.md
+          find fixes installer -type f -print
+
+      - name: Check installer contents
+        shell: bash
+        run: |
+          set -e
+          echo "Installer files:"
+          find installer -maxdepth 3 -type f -print
+          echo "Checking for build scripts..."
+          find . -maxdepth 3 -type f \
+            \( -name 'build.sh' \
+            -o -name 'Makefile' \
+            -o -name 'Android.mk' \) -print
+
+      - name: Package source archive
+        shell: bash
+        run: |
+          set -e
+          mkdir -p dist
+          git archive --format=zip \
+            --prefix=ubuntu-touch-sweetin/ \
+            HEAD -o dist/ubports-sweet-source.zip
+          sha256sum dist/ubports-sweet-source.zip \
+            > dist/SHA256SUMS.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubports-sweet-source
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
