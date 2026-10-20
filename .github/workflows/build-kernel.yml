@@ -87,11 +87,6 @@ jobs:
           grep -E '^(CONFIG_ARM64|CONFIG_ARCH_QCOM|CONFIG_LOCALVERSION)=' \
             "arch/arm64/configs/${DEVICE}_defconfig" || true
           git submodule status
-      - name: Clone AnyKernel3
-        run: |
-          git clone --depth=1 \
-            https://github.com/osm0sis/AnyKernel3.git \
-            AnyKernel3
       - name: Build kernel and package AnyKernel3
         shell: bash
         run: |
@@ -129,6 +124,11 @@ jobs:
               out/arch/arm64/boot/dtbo.img \
               out/arch/arm64/boot/dtb.img
           } > ../artifacts/BUILD-INFO.txt
+      - name: Clone AnyKernel3
+        run: |
+          git clone --depth=1 \
+            https://github.com/osm0sis/AnyKernel3.git \
+            AnyKernel3
 
       - name: Upload flashable ZIP
         uses: actions/upload-artifact@v4
