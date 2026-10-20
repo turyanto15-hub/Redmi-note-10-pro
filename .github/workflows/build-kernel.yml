@@ -87,48 +87,77 @@ jobs:
           grep -E '^(CONFIG_ARM64|CONFIG_ARCH_QCOM|CONFIG_LOCALVERSION)=' \
             "arch/arm64/configs/${DEVICE}_defconfig" || true
           git submodule status
+
       - name: Build kernel and package AnyKernel3
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
+
           cd kernel-source
+
+          echo "=== Build kernel ==="
           printf '%s\n' "$DEVICE" | bash ./build.sh 2>&1 | tee ../kernel-build.log
-          shopt -s nullglob
-          zips=( *.zip )
-          if (( ${#zips[@]} == 0 )); then
-            echo "ERROR: build.sh did not produce a ZIP."
+
+          echo "=== Clone AnyKernel3 ==="
+          cd ..
+          git clone --depth=1 \
+            https://github.com/osm0sis/AnyKernel3.git \
+            AnyKernel3
+
+          echo "=== Check build output ==="
+          cd kernel-source
+
+          IMAGE=""
+          for candidate in \
+            out/arch/arm64/boot/Image.gz \
+            out/arch/arm64/boot/Image \
+            out/arch/arm64/boot/Image.gz-dtb; do
+            if [ -s "$candidate" ]; then
+              IMAGE="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$IMAGE" ]; then
+            echo "ERROR: Kernel image tidak ditemukan."
+            find . -type f \( \
+              -name Image -o \
+              -name Image.gz -o \
+              -name Image.gz-dtb \
+            \) -print
             exit 1
           fi
-          for zipfile in "${zips[@]}"; do
-            unzip -t "$zipfile"
-            echo "Built package: $zipfile"
-          done
-          test -s "out/arch/arm64/boot/Image.gz"
-          test -s "out/arch/arm64/boot/dtbo.img"
-          test -s "out/arch/arm64/boot/dtb.img"
+
+          echo "Kernel image ditemukan: $IMAGE"
+
+          echo "=== Prepare AnyKernel3 package ==="
+          cp -f "$IMAGE" ../AnyKernel3/
+
+          cd ../AnyKernel3
+
+          if [ ! -f anykernel.sh ]; then
+            echo "ERROR: anykernel.sh tidak ditemukan."
+            exit 1
+          fi
+
+          zip -r9 "../KSUNext-${DEVICE}-AnyKernel3.zip" . \
+            -x '.git/*' \
+            -x '*.zip'
+
+          unzip -t "../KSUNext-${DEVICE}-AnyKernel3.zip"
+
           mkdir -p ../artifacts
-          cp -v "${zips[@]}" ../artifacts/
-          cp -v out/arch/arm64/boot/Image.gz ../artifacts/ || true
-          cp -v out/arch/arm64/boot/dtbo.img ../artifacts/ || true
-          cp -v out/arch/arm64/boot/dtb.img ../artifacts/ || true
+          mv "../KSUNext-${DEVICE}-AnyKernel3.zip" ../artifacts/
+
           {
             echo "Device: $DEVICE"
             echo "Source: https://github.com/Mryassinov/kernel_xiaomi_sweet"
             echo "Branch: $KERNEL_BRANCH"
-            echo "Commit: $(git rev-parse HEAD)"
-            echo "Kernel Makefile version:"
-            grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) =' Makefile || true
-            echo
-            echo "Image files:"
-            ls -lh out/arch/arm64/boot/Image.gz \
-              out/arch/arm64/boot/dtbo.img \
-              out/arch/arm64/boot/dtb.img
+            echo "Commit: $(git -C ../kernel-source rev-parse HEAD)"
+            echo "Kernel image: $IMAGE"
+            echo "Packaging: AnyKernel3"
           } > ../artifacts/BUILD-INFO.txt
-      - name: Clone AnyKernel3
-        run: |
-          git clone --depth=1 \
-            https://github.com/osm0sis/AnyKernel3.git \
-            AnyKernel3
+
 
       - name: Upload flashable ZIP
         uses: actions/upload-artifact@v4
