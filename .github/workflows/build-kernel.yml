@@ -1,65 +1,149 @@
-name: Build Android Kernel Rebase (Manual Way)
+name: Build KSUNext Kernel - Redmi Note 10 Pro (sweet)
 
 on:
   workflow_dispatch:
+    inputs:
+      kernel_branch:
+        description: "KSUNext kernel source branch"
+        required: true
+        default: "sixteen-ksu-next"
+      device:
+        description: "Device codename (this workflow is configured for sweet)"
+        required: true
+        default: "sweet"
+        type: choice
+        options:
+          - sweet
+      upload_debug_files:
+        description: "Upload build output and logs for debugging"
+        required: true
+        default: true
+        type: boolean
+  push:
+    paths:
+      - ".github/workflows/build-kernel.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kernel-sweet-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-kernel:
-    name: Build Kernel via Cloud
+  build:
+    name: Build kernel and AnyKernel3 ZIP
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    env:
+      DEVICE: ${{ inputs.device || 'sweet' }}
+      KERNEL_BRANCH: ${{ inputs.kernel_branch || 'sixteen-ksu-next' }}
+      CLANG_DIR: /home/runner/evo16/prebuilts/clang/host/linux-x86/clang-r547379
 
     steps:
-      - name: Checkout Kernel Source
+      - name: Checkout workflow repository
         uses: actions/checkout@v4
 
-      - name: Install Compiling Dependencies
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential bc bison flex libssl-dev u-boot-tools zip libffi-dev libncurses-dev git libelf-dev libkmod-dev
+          sudo apt-get install -y \
+            bc bison build-essential ccache curl flex \
+            g++-multilib gcc-multilib git gnupg gperf \
+            imagemagick liblz4-tool libncurses-dev libssl-dev \
+            libxml2 libxml2-utils lzop rsync schedtool \
+            squashfs-tools xsltproc zip zlib1g-dev libelf-dev \
+            python3 python-is-python3
 
-      - name: Download Proton Clang Toolchain
+      - name: Checkout KSUNext kernel source
         run: |
-          echo "Mengunduh Proton Clang Compiler..."
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git
-          
-      
-      - name: Compile Kernel Manually
-        run: |
-          echo "Memulai proses kompilasi kernel dengan Proton Clang..."
-          export PATH="${PWD}/proton-clang/bin:$PATH"
-          export ARCH=arm64
-          export SUBARCH=arm64
-          
-          # DETEKSI JALUR DEFCONFIG KEDUA UNTUK PROSES MAKE
-          CONF_FILE=$(find arch/arm64/configs/ -name "sweet_defconfig" | sed 's|arch/arm64/configs/||')
-          echo "Menggunakan konfigurasi: $CONF_FILE"
-          
-          make O=out "$CONF_FILE"
-          
-          make -j$(nproc --all) O=out \
-                      CC=clang \
-                      CROSS_COMPILE=aarch64-linux-gnu- \
-                      CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          git clone --depth=1 --branch "$KERNEL_BRANCH" \
+            https://github.com/Mryassinov/kernel_xiaomi_sweet.git kernel-source
+          cd kernel-source
+          git submodule update --init --recursive
+          echo "Kernel branch: $(git branch --show-current)"
+          echo "Kernel commit: $(git rev-parse HEAD)"
+          echo "Kernel version from Makefile:"
+          grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) =' Makefile || true
 
-      - name: Package with AnyKernel3 (HyperOS Optimized)
+      - name: Install Clang toolchain expected by upstream build.sh
         run: |
-          echo "Membuat paket ZIP Flashable..."
-          git clone --depth=1 https://github.com AnyKernel3
-          
-          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/ || cp out/arch/arm64/boot/Image.gz AnyKernel3/ || cp out/arch/arm64/boot/Image AnyKernel3/
-          
-          cd AnyKernel3
-          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
-          sed -i 's/block=\/dev\/block\/bootdevice\/by-name\/boot;/block=auto;/g' anykernel.sh
-          
-          echo "is_slot_device=0;" >> anykernel.sh
-          echo "ramdisk_compression=auto;" >> anykernel.sh
-          echo "split_boot=auto;" >> anykernel.sh
-          
-          zip -r9 ../Kernel-HyperOS-Sweet-KSUNext.zip *
+          mkdir -p "$(dirname "$CLANG_DIR")"
+          curl -fL --retry 3 \
+            https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz \
+            -o /tmp/clang-r547379.tar.gz
+          mkdir -p "$CLANG_DIR"
+          tar -xzf /tmp/clang-r547379.tar.gz -C "$CLANG_DIR"
+          test -x "$CLANG_DIR/bin/clang"
+          "$CLANG_DIR/bin/clang" --version
 
-      - name: Upload Flashable Zip Artifact
+      - name: Verify device configuration
+        run: |
+          cd kernel-source
+          test "$DEVICE" = "sweet"
+          test -f "arch/arm64/configs/${DEVICE}_defconfig"
+          echo "Found defconfig: arch/arm64/configs/${DEVICE}_defconfig"
+          grep -E '^(CONFIG_ARM64|CONFIG_ARCH_QCOM|CONFIG_LOCALVERSION)=' \
+            "arch/arm64/configs/${DEVICE}_defconfig" || true
+          git submodule status
+
+      - name: Build kernel and package AnyKernel3
+        shell: bash
+        run: |
+          set -o pipefail
+          cd kernel-source
+          printf '%s\n' "$DEVICE" | bash ./build.sh 2>&1 | tee ../kernel-build.log
+          shopt -s nullglob
+          zips=( *.zip )
+          if (( ${#zips[@]} == 0 )); then
+            echo "ERROR: build.sh did not produce a ZIP."
+            exit 1
+          fi
+          for zipfile in "${zips[@]}"; do
+            unzip -t "$zipfile"
+            echo "Built package: $zipfile"
+          done
+          test -s "out/arch/arm64/boot/Image.gz"
+          test -s "out/arch/arm64/boot/dtbo.img"
+          test -s "out/arch/arm64/boot/dtb.img"
+          mkdir -p ../artifacts
+          cp -v "${zips[@]}" ../artifacts/
+          cp -v out/arch/arm64/boot/Image.gz ../artifacts/ || true
+          cp -v out/arch/arm64/boot/dtbo.img ../artifacts/ || true
+          cp -v out/arch/arm64/boot/dtb.img ../artifacts/ || true
+          {
+            echo "Device: $DEVICE"
+            echo "Source: https://github.com/Mryassinov/kernel_xiaomi_sweet"
+            echo "Branch: $KERNEL_BRANCH"
+            echo "Commit: $(git rev-parse HEAD)"
+            echo "Kernel Makefile version:"
+            grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) =' Makefile || true
+            echo
+            echo "Image files:"
+            ls -lh out/arch/arm64/boot/Image.gz \
+              out/arch/arm64/boot/dtbo.img \
+              out/arch/arm64/boot/dtb.img
+          } > ../artifacts/BUILD-INFO.txt
+
+      - name: Upload flashable ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-HyperOS-Sweet-KSUNext
-          path: Kernel-HyperOS-Sweet-KSUNext.zip
+          name: KSUNext-sweet-AnyKernel3
+          path: artifacts/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload image files and build information
+        if: ${{ always() && inputs.upload_debug_files != false }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: KSUNext-sweet-debug
+          path: |
+            kernel-build.log
+            artifacts/BUILD-INFO.txt
+            artifacts/Image.gz
+            artifacts/dtbo.img
+            artifacts/dtb.img
+          if-no-files-found: warn
+          retention-days: 14
