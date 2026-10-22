@@ -1,0 +1,130 @@
+
+name: Inspect UBports Sources - sweet
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_tree_url:
+        description: "URL repository device tree"
+        required: true
+        default: "https://github.com/LineageOS/android_device_xiaomi_sweet"
+        type: string
+      device_tree_branch:
+        description: "Branch device tree"
+        required: true
+        default: "lineage-23.2"
+        type: string
+      kernel_source_url:
+        description: "URL source kernel yang akan diperiksa"
+        required: false
+        default: ""
+        type: string
+      kernel_source_branch:
+        description: "Branch kernel"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Install inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git unzip file
+
+      - name: Clone and inspect sources
+        env:
+          DEVICE_URL: ${{ inputs.device_tree_url }}
+          DEVICE_BRANCH: ${{ inputs.device_tree_branch }}
+          KERNEL_URL: ${{ inputs.kernel_source_url }}
+          KERNEL_BRANCH: ${{ inputs.kernel_source_branch }}
+        shell: bash
+        run: |
+          set -u
+          mkdir -p audit
+          REPORT="$GITHUB_WORKSPACE/audit/source-report.txt"
+          exec > >(tee "$REPORT") 2>&1
+
+          clone_repo() {
+            local name="$1"
+            local url="$2"
+            local branch="$3"
+
+            if [[ -z "$url" ]]; then
+              echo "SKIP: $name URL belum diisi"
+              return 0
+            fi
+
+            if [[ ! "$url" =~ ^https://github\.com/[^/]+/[^/]+(\.git)?$ ]]; then
+              echo "ERROR: URL $name bukan URL repository GitHub yang valid"
+              return 1
+            fi
+
+            local args=()
+            if [[ -n "$branch" ]]; then
+              args=(--branch "$branch")
+            fi
+
+            if ! git clone --depth 1 \
+              "${args[@]}" "$url" "sources/$name"; then
+              echo "ERROR: gagal clone $name"
+              return 1
+            fi
+
+            echo
+            echo "===== $name ====="
+            git -C "sources/$name" log -1 \
+              --format='Commit: %H%nTanggal: %cs%nPesan: %s'
+
+            echo "--- File konfigurasi penting ---"
+            find "sources/$name" -type f \
+              \( -name 'BoardConfig.mk' \
+              -o -name 'AndroidProducts.mk' \
+              -o -name 'device.mk' \
+              -o -name 'lineage.dependencies' \
+              -o -name 'Android.bp' \
+              -o -name 'Makefile' \
+              -o -name '*defconfig' \
+              -o -name 'deviceinfo' \
+              -o -name 'proprietary-files.txt' \) \
+              -print | head -n 200
+
+            echo "--- Versi kernel ---"
+            if [[ -f "sources/$name/Makefile" ]]; then
+              grep -m 1 -E '^VERSION[[:space:]]*=' \
+                "sources/$name/Makefile" || true
+              grep -m 1 -E '^PATCHLEVEL[[:space:]]*=' \
+                "sources/$name/Makefile" || true
+              grep -m 1 -E '^SUBLEVEL[[:space:]]*=' \
+                "sources/$name/Makefile" || true
+            fi
+          }
+
+          mkdir -p sources
+          echo "Target device: sweet"
+          echo "ROM target: HyperOS 4 port / Android 17 (belum diverifikasi)"
+          echo "Mode: audit saja, tanpa build atau flashing"
+
+          clone_repo device-tree "$DEVICE_URL" "$DEVICE_BRANCH"
+          clone_repo kernel "$KERNEL_URL" "$KERNEL_BRANCH"
+
+          echo
+          echo "Audit selesai. Periksa setiap temuan secara manual."
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sweet-ubports-source-audit
+          path: audit/source-report.txt
+          if-no-files-found: warn
+          retention-days: 7
