@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       kernel_url:
-        description: "GitHub URL source kernel sweet"
+        description: "https://github.com/techyminati/android_kernel_xiaomi_sweet.git"
         required: true
         type: string
       kernel_branch:
-        description: "Branch kernel yang akan diperiksa"
+        description: "android-11.0"
         required: true
         type: string
 
