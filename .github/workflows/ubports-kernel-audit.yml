@@ -1,4 +1,3 @@
-
 name: UBports Kernel Audit - sweet
 
 on:
@@ -9,7 +8,8 @@ on:
         required: true
         type: string
       kernel_branch:
-        description: "android-11.0"
+        description: "Kernel branch"
+        default: "android-11.0"
         required: true
         type: string
 
