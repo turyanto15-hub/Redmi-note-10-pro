@@ -29,7 +29,24 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y git file python3
+      - name: Find candidate defconfig files
+        shell: bash
+        run: |
+          set -euo pipefail
 
+          REPORT="kernel-audit-report.md"
+          echo "## Candidate defconfig files" >> "$REPORT"
+
+          find kernel/arch -type f \
+            \( -name '*defconfig' -o -name 'defconfig' \) \
+            -print 2>/dev/null \
+            | sort > /tmp/defconfig-list.txt || true
+
+          if [ -s /tmp/defconfig-list.txt ]; then
+            sed -n '1,100p' /tmp/defconfig-list.txt >> "$REPORT"
+          else
+            echo "Tidak ditemukan kandidat defconfig." >> "$REPORT"
+          fi
       - name: Clone kernel source
         env:
           KERNEL_URL: ${{ inputs.kernel_url }}
