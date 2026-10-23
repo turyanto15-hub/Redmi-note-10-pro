@@ -1,109 +1,79 @@
-name: Audit Kernel - Redmi Note 10 Pro (sweet)
+name: Audit Kernel sweet
+
 on:
  workflow_dispatch:
 
 permissions:
  contents: read
-
 jobs:
-   audit:
-    name: Audit Kernel Source
-    runs-on: ubuntu-latest
-   timeout-minutes: 15
+  audit:
+   runs-on: ubuntu-latest
+   timeout-minutes: 10 
+   
    steps:
    - name: Checkout repository
      uses: actions/checkout@v4
-   - name: Show repository information
+
+   - name: Check repository
      shell: bash
      run: |
       set -eu
-
       echo "=== Repository ==="
       pwd
       git log -1 --oneline
-      git rev-parse HEAD
 
    - name: Locate kernel source
-     shell: bash
-     run: |
-       set -eu
-
-       if [ -f kernel/Makefile ]; then
-        echo "Kernel source ditemukan di folder kernel/"
-       elif [ -f Makefile ] && [ -d arch/arm64 ]; then
-        echo "Kernel source berada di root repository"
-       else
-        echo "::error::Source kernel tidak ditemukan."
-        echo "Periksa apakah kernel sudah di-clone ke repository."
-        exit 1
-       fi
-
-   - name: Set kernel source directory
      shell: bash
      run: |
       set -eu
 
       if [ -f kernel/Makefile ]; then
-        echo "KERNEL_DIR=kernel" >> "$GITHUB_ENV"
+        KERNEL_DIR=kernel
       elif [ -f Makefile ] && [ -d arch/arm64 ]; then
-        echo "KERNEL_DIR=." >> "$GITHUB_ENV"
+        KERNEL_DIR=.
       else
-        echo "::error::Direktori kernel tidak ditemukan."
+        echo "::error::Kernel source tidak ditemukan."
+        echo "Source harus berada di folder kernel/ atau root repository."
         exit 1
       fi
+
+      echo "KERNEL_DIR=$KERNEL_DIR" >> "$GITHUB_ENV"
 
    - name: Check kernel version
      shell: bash
      run: |
       set -eu
-
       echo "=== Kernel version ==="
-      grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL|EXTRAVERSION) =' \
-        "$KERNEL_DIR/Makefile"
+      grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL|EXTRAVERSION) =' "$KERNEL_DIR/Makefile"
 
-   - name: Inspect sweet kernel configuration
+   - name: Inspect sweet defconfig
      shell: bash
      run: |
       set -eu
 
       DEFCONFIG="$KERNEL_DIR/arch/arm64/configs/vendor/sweet_user_defconfig"
 
-      echo "=== Architecture ==="
-      grep -nE '^(ARCH|SRCARCH)' "$KERNEL_DIR/Makefile" || true
-
-      echo "=== Defconfig candidates ==="
-      find "$KERNEL_DIR/arch/arm64/configs" \
-        -type f -name '*sweet*defconfig' -print
-
-      echo "=== Vendor sweet defconfig ==="
+      echo "=== Defconfig ==="
       if [ -f "$DEFCONFIG" ]; then
         sed -n '1,100p' "$DEFCONFIG"
       else
-        echo "Vendor sweet defconfig tidak ditemukan di lokasi ini."
+        echo "::warning::Vendor sweet defconfig tidak ditemukan."
       fi
 
-      echo "=== Important kernel options ==="
-      if [ -f "$DEFCONFIG" ]; then
-        grep -nE \
-          'CONFIG_(ARM64|MODULES|DEVTMPFS|BLK_DEV_INITRD|EFI|OF|MSM|QCOM|ANDROID|SECURITY_SELINUX)=' \
-          "$DEFCONFIG" || true
-      fi
-
-      echo "=== Generic Android build config ==="
+      echo "=== Build config ==="
       if [ -f "$KERNEL_DIR/build.config.aarch64" ]; then
-        sed -n '1,160p' "$KERNEL_DIR/build.config.aarch64"
+        sed -n '1,100p' "$KERNEL_DIR/build.config.aarch64"
       else
         echo "build.config.aarch64 tidak ditemukan."
       fi
 
-   - name: Inspect device tree candidates
+   - name: Inspect device tree
      shell: bash
      run: |
       set -eu
 
       DTS_DIR="$KERNEL_DIR/arch/arm64/boot/dts"
 
-      echo "=== Device tree candidates ==="
       if [ -d "$DTS_DIR" ]; then
         find "$DTS_DIR" -type f \
           | grep -Ei 'sweet|atoll|sm6150|qcom' \
@@ -112,27 +82,16 @@ jobs:
         echo "Direktori device tree tidak ditemukan."
       fi
 
-   - name: Inspect boot and packaging files
+   - name: Inspect boot files
      shell: bash
      run: |
       set -eu
 
-      echo "=== Boot image and packaging files ==="
       find . -maxdepth 5 -type f \
-        \( -name 'mkbootimg' \
-        -o -name 'boot.img' \
+        \( -name 'boot.img' \
         -o -name 'dtbo.img' \
         -o -name 'vendor_boot.img' \
-        -o -name 'AnyKernel3' \
-        -o -name 'Image.gz-dtb' \
-        -o -name 'Image.gz' \) \
-         -print | sed -n '1,100p'
-   - name: Audit summary
-     if: always()
-     shell: bash
-     run: |
-          echo "=== Audit summary ==="
-          echo "Target device: sweet"
-          echo "Target OS: UBports / Ubuntu Touch"
-          echo "Kernel build: belum dijalankan"
-      echo "Boot compatibility: belum diverifikasi"
+        -o -name 'mkbootimg' \
+        -o -name 'Image.gz' \
+        -o -name 'Image.gz-dtb' \) \
+        -print | sed -n '1,100p'
