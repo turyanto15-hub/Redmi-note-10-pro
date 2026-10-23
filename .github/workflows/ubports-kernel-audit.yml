@@ -100,11 +100,11 @@ jobs:
             echo
             echo "=== Build scripts ==="
             find kernel -maxdepth 3 -type f \
-              \( -name 'build.sh' \
-              -o -name 'Makefile' \
-              -o -name 'build.config*' \
-              -o -name 'Kconfig' \) \
-              -print | head -n 200
+            \( -name 'build.sh' \
+            -o -name 'Makefile' \
+            -o -name 'build.config*' \
+            -o -name 'Kconfig' \) \
+            -print | sed -n '1,200p'
 
             echo
             echo "=== Relevant kernel configuration ==="
