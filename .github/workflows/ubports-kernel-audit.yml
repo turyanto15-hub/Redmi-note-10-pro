@@ -126,13 +126,13 @@ jobs:
         -o -name 'AnyKernel3' \
         -o -name 'Image.gz-dtb' \
         -o -name 'Image.gz' \) \
-        -print | sed -n '1,100p'
+         -print | sed -n '1,100p'
    - name: Audit summary
      if: always()
      shell: bash
      run: |
-       echo "=== Audit summary ==="
-       echo "Target device: sweet"
-       echo "Target OS: UBports / Ubuntu Touch"
-       echo "Kernel build: belum dijalankan"
+          echo "=== Audit summary ==="
+          echo "Target device: sweet"
+          echo "Target OS: UBports / Ubuntu Touch"
+          echo "Kernel build: belum dijalankan"
       echo "Boot compatibility: belum diverifikasi"
