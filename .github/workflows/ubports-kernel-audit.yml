@@ -1,133 +1,139 @@
-name: UBports Kernel Audit - sweet
-
+name: Audit Kernel - Redmi Note 10 Pro (sweet)
 on:
-  workflow_dispatch:
-    inputs:
-      kernel_url:
-        description: "https://github.com/techyminati/android_kernel_xiaomi_sweet.git"
-        required: true
-        type: string
-      kernel_branch:
-        description: "Kernel branch"
-        default: "android-11.0"
-        required: true
-        type: string
+ workflow_dispatch:
 
 permissions:
-  contents: read
+ contents: read
 
 jobs:
-  audit:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+   audit:
+    name: Audit Kernel Source
+    runs-on: ubuntu-latest
+   timeout-minutes: 15
+   steps:
+   - name: Checkout repository
+     uses: actions/checkout@v4
+   - name: Show repository information
+     shell: bash
+     run: |
+      set -eu
 
-    steps:
-      - name: Checkout project
-        uses: actions/checkout@v4
+      echo "=== Repository ==="
+      pwd
+      git log -1 --oneline
+      git rev-parse HEAD
 
-      - name: Install tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git file python3
-      - name: Find candidate defconfig files
-        shell: bash
-        run: |
-          set -euo pipefail
+   - name: Locate kernel source
+     shell: bash
+     run: |
+       set -eu
 
-          REPORT="kernel-audit-report.md"
-          echo "## Candidate defconfig files" >> "$REPORT"
+       if [ -f kernel/Makefile ]; then
+        echo "Kernel source ditemukan di folder kernel/"
+       elif [ -f Makefile ] && [ -d arch/arm64 ]; then
+        echo "Kernel source berada di root repository"
+       else
+        echo "::error::Source kernel tidak ditemukan."
+        echo "Periksa apakah kernel sudah di-clone ke repository."
+        exit 1
+       fi
 
-          find kernel/arch -type f \
-            \( -name '*defconfig' -o -name 'defconfig' \) \
-            -print 2>/dev/null \
-            | sort > /tmp/defconfig-list.txt || true
+   - name: Set kernel source directory
+     shell: bash
+     run: |
+      set -eu
 
-          if [ -s /tmp/defconfig-list.txt ]; then
-            sed -n '1,100p' /tmp/defconfig-list.txt >> "$REPORT"
-          else
-            echo "Tidak ditemukan kandidat defconfig." >> "$REPORT"
-          fi
-      - name: Clone kernel source
-        env:
-          KERNEL_URL: ${{ inputs.kernel_url }}
-          KERNEL_BRANCH: ${{ inputs.kernel_branch }}
-        shell: bash
-        run: |
-          set -euo pipefail
+      if [ -f kernel/Makefile ]; then
+        echo "KERNEL_DIR=kernel" >> "$GITHUB_ENV"
+      elif [ -f Makefile ] && [ -d arch/arm64 ]; then
+        echo "KERNEL_DIR=." >> "$GITHUB_ENV"
+      else
+        echo "::error::Direktori kernel tidak ditemukan."
+        exit 1
+      fi
 
-          [[ "$KERNEL_URL" =~ ^https://github\.com/[^/]+/[^/]+(\.git)?$ ]] || {
-            echo "Gunakan URL repository GitHub yang valid"
-            exit 1
-          }
+   - name: Check kernel version
+     shell: bash
+     run: |
+      set -eu
 
-          git clone --depth 1 \
-            --branch "$KERNEL_BRANCH" \
-            "$KERNEL_URL" kernel
+      echo "=== Kernel version ==="
+      grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL|EXTRAVERSION) =' \
+        "$KERNEL_DIR/Makefile"
 
-      - name: Audit source
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p audit
-          REPORT="$GITHUB_WORKSPACE/audit/kernel-report.txt"
+   - name: Inspect sweet kernel configuration
+     shell: bash
+     run: |
+      set -eu
 
-          {
-            echo "Device target: sweet"
-            echo "Target OS: UBports / Ubuntu Touch"
-            echo "Catatan: belum ada klaim kompatibilitas."
+      DEFCONFIG="$KERNEL_DIR/arch/arm64/configs/vendor/sweet_user_defconfig"
 
-            echo
-            echo "=== Commit ==="
-            git -C kernel log -1 --format='%H%n%s'
+      echo "=== Architecture ==="
+      grep -nE '^(ARCH|SRCARCH)' "$KERNEL_DIR/Makefile" || true
 
-            echo
-            echo "=== Kernel version ==="
-            if [[ -f kernel/Makefile ]]; then
-              grep -E \
-                '^(VERSION|PATCHLEVEL|SUBLEVEL|EXTRAVERSION)[[:space:]]*=' \
-                kernel/Makefile || true
-            fi
+      echo "=== Defconfig candidates ==="
+      find "$KERNEL_DIR/arch/arm64/configs" \
+        -type f -name '*sweet*defconfig' -print
 
-            echo
-            echo "=== Architecture config candidates ==="
-            find kernel/arch/arm64/configs \
-              -maxdepth 3 -type f \
-              \( -name '*sweet*defconfig' \
-              -o -name '*defconfig' \
-              -o -name '*halium*.config' \) \
-              -print 2>/dev/null | head -n 250 || true
+      echo "=== Vendor sweet defconfig ==="
+      if [ -f "$DEFCONFIG" ]; then
+        sed -n '1,100p' "$DEFCONFIG"
+      else
+        echo "Vendor sweet defconfig tidak ditemukan di lokasi ini."
+      fi
 
-            echo
-            echo "=== Build scripts ==="
-            find kernel -maxdepth 3 -type f \
-            \( -name 'build.sh' \
-            -o -name 'Makefile' \
-            -o -name 'build.config*' \
-            -o -name 'Kconfig' \) \
-            -print | sed -n '1,200p'
+      echo "=== Important kernel options ==="
+      if [ -f "$DEFCONFIG" ]; then
+        grep -nE \
+          'CONFIG_(ARM64|MODULES|DEVTMPFS|BLK_DEV_INITRD|EFI|OF|MSM|QCOM|ANDROID|SECURITY_SELINUX)=' \
+          "$DEFCONFIG" || true
+      fi
 
-            echo
-            echo "=== Relevant kernel configuration ==="
-            grep -R -n -E \
-              'CONFIG_(DEVTMPFS|FHANDLE|SYSVIPC|IPC_NS|NET_NS|PID_NS|USER_NS|UTS_NS|SECURITY_APPARMOR)=' \
-              kernel/arch/arm64/configs \
-              2>/dev/null | head -n 200 || true
+      echo "=== Generic Android build config ==="
+      if [ -f "$KERNEL_DIR/build.config.aarch64" ]; then
+        sed -n '1,160p' "$KERNEL_DIR/build.config.aarch64"
+      else
+        echo "build.config.aarch64 tidak ditemukan."
+      fi
 
-            echo
-            echo "=== Existing boot and device metadata ==="
-            find kernel -type f \
-              \( -name 'deviceinfo' \
-              -o -name 'BoardConfig.mk' \
-              -o -name 'fstab*' \
-              -o -name 'mkbootimg*' \) \
-              -print | head -n 200
-          } 2>&1 | tee "$REPORT"
+   - name: Inspect device tree candidates
+     shell: bash
+     run: |
+      set -eu
 
-      - name: Upload audit
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sweet-kernel-audit
-          path: audit/kernel-report.txt
-          if-no-files-found: warn
-          retention-days: 7
+      DTS_DIR="$KERNEL_DIR/arch/arm64/boot/dts"
+
+      echo "=== Device tree candidates ==="
+      if [ -d "$DTS_DIR" ]; then
+        find "$DTS_DIR" -type f \
+          | grep -Ei 'sweet|atoll|sm6150|qcom' \
+          | sed -n '1,100p' || true
+      else
+        echo "Direktori device tree tidak ditemukan."
+      fi
+
+   - name: Inspect boot and packaging files
+     shell: bash
+     run: |
+      set -eu
+
+      echo "=== Boot image and packaging files ==="
+      find . -maxdepth 5 -type f \
+        \( -name 'mkbootimg' \
+        -o -name 'boot.img' \
+        -o -name 'dtbo.img' \
+        -o -name 'vendor_boot.img' \
+        -o -name 'AnyKernel3' \
+        -o -name 'Image.gz-dtb' \
+        -o -name 'Image.gz' \) \
+        -print | sed -n '1,100p'
+
+   - name: Audit summary
+     if: always()
+     shell: bash
+     run: |
+       echo "=== Audit summary ==="
+       echo "Target device: sweet"
+       echo "Target OS: UBports / Ubuntu Touch"
+       echo "Kernel build: belum dijalankan"
+      echo "Boot compatibility: belum diverifikasi"
