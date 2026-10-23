@@ -1,0 +1,31 @@
+       - name: Inspect sweet kernel configuration
+        shell: bash
+        run: |
+          set -eu
+
+          echo "=== Vendor sweet defconfig ==="
+          sed -n '1,100p' \
+            kernel/arch/arm64/configs/vendor/sweet_user_defconfig
+
+          echo "=== Important kernel options ==="
+          grep -nE \
+            'CONFIG_(ARM64|MODULES|DEVTMPFS|BLK_DEV_INITRD|EFI|OF|MSM|QCOM|ANDROID|SECURITY_SELINUX)=' \ kernel/arch/arm64/configs/vendor/sweet_user_defconfig || true
+
+          echo "=== Generic Android build config ==="
+          sed -n '1,160p' kernel/build.config.aarch64
+
+          echo "=== Device tree candidates ==="
+          if [ -d kernel/arch/arm64/boot/dts ]; then
+            find kernel/arch/arm64/boot/dts -type f \
+              | grep -Ei 'sweet|atoll|sm6150|qcom' \
+              | sed -n '1,100p' || true
+          fi
+
+          echo "=== Boot image and packaging files ==="
+          find . -maxdepth 4 -type f \
+            \( -name 'mkbootimg' \
+            -o -name 'boot.img' \
+            -o -name 'AnyKernel3' \
+            -o -name 'dtbo.img' \
+            -o -name 'vendor_boot.img' \) \
+            -print | sed -n '1,100p'
