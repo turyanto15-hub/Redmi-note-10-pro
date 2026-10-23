@@ -127,7 +127,6 @@ jobs:
         -o -name 'Image.gz-dtb' \
         -o -name 'Image.gz' \) \
         -print | sed -n '1,100p'
-
    - name: Audit summary
      if: always()
      shell: bash
